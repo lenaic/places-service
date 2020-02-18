@@ -1,18 +1,23 @@
 package ch.local.places.service;
 
+import java.time.DayOfWeek;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
 import ch.local.places.client.UpstreamPlaceClient;
 import ch.local.places.client.model.UpstreamPlace;
 import ch.local.places.model.Interval;
 import ch.local.places.model.Place;
 import ch.local.places.model.WeekDayInterval;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import java.time.DayOfWeek;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 public class PlaceService {
@@ -40,6 +45,25 @@ public class PlaceService {
             })
             .collect(Collectors.toList());
 
-        return new Place(upstreamPlace.getId(), upstreamPlace.getName(), upstreamPlace.getAddress(), openingHours);
+        boolean open = false;
+        Instant now = Instant.now();
+        ZonedDateTime localNow = now.atZone(ZoneId.systemDefault());
+        DayOfWeek currentDayOfWeek = localNow.getDayOfWeek();
+        for (WeekDayInterval dayInterval : openingHours) {
+            if (!dayInterval.getDayOfWeek().equals(currentDayOfWeek))
+                continue;
+
+            for (Interval formattedInterval : dayInterval.getIntervals()) {
+                final ZonedDateTime from = ZonedDateTime.of(localNow.toLocalDate(), LocalTime.parse(formattedInterval.getFrom()), localNow.getZone());
+                final ZonedDateTime to = ZonedDateTime.of(localNow.toLocalDate(), LocalTime.parse(formattedInterval.getTo()), localNow.getZone());
+                org.threeten.extra.Interval interval = org.threeten.extra.Interval.of(from.toInstant(), to.toInstant());
+                if (interval.contains(now)) {
+                    open = true;
+                    break;
+                }
+            }
+        }
+
+        return new Place(upstreamPlace.getId(), upstreamPlace.getName(), upstreamPlace.getAddress(), open, openingHours);
     }
 }
