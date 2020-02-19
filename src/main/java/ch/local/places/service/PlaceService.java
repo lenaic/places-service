@@ -78,7 +78,11 @@ public class PlaceService {
                     if (!from.isBefore(localNow)) {
                         nextOpeningDateTime = String.format("Today at %s", formattedInterval.getFrom());
                         foundNext = true;
+                        break;
                     }
+
+                    if (foundNext)
+                        break;
                 }
             }
 
