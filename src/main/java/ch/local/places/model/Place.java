@@ -19,6 +19,8 @@ public class Place {
 
     private final boolean open;
 
+    private final String nextOpeningDateTime;
+
     @NonNull
     private final List<WeekDayInterval> openingHours;
 

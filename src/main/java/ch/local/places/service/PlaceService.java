@@ -46,8 +46,7 @@ public class PlaceService {
             .collect(Collectors.toList());
 
         boolean open = false;
-        Instant now = Instant.now();
-        ZonedDateTime localNow = now.atZone(ZoneId.systemDefault());
+        ZonedDateTime localNow = Instant.now().atZone(ZoneId.systemDefault());
         DayOfWeek currentDayOfWeek = localNow.getDayOfWeek();
         for (WeekDayInterval dayInterval : openingHours) {
             if (!dayInterval.getDayOfWeek().equals(currentDayOfWeek))
@@ -55,15 +54,70 @@ public class PlaceService {
 
             for (Interval formattedInterval : dayInterval.getIntervals()) {
                 final ZonedDateTime from = ZonedDateTime.of(localNow.toLocalDate(), LocalTime.parse(formattedInterval.getFrom()), localNow.getZone());
-                final ZonedDateTime to = ZonedDateTime.of(localNow.toLocalDate(), LocalTime.parse(formattedInterval.getTo()), localNow.getZone());
+                ZonedDateTime to = ZonedDateTime.of(localNow.toLocalDate(), LocalTime.parse(formattedInterval.getTo()), localNow.getZone());
+                if (to.isBefore(from))
+                    to = to.plusDays(1);
+
                 org.threeten.extra.Interval interval = org.threeten.extra.Interval.of(from.toInstant(), to.toInstant());
-                if (interval.contains(now)) {
+                if (interval.contains(localNow.toInstant())) {
                     open = true;
                     break;
                 }
             }
         }
 
-        return new Place(upstreamPlace.getId(), upstreamPlace.getName(), upstreamPlace.getAddress(), open, openingHours);
+        String nextOpeningDateTime = "now";
+        if (!open) {
+            boolean foundNext = false;
+            for (WeekDayInterval dayInterval : openingHours) {
+                if (!dayInterval.getDayOfWeek().equals(currentDayOfWeek))
+                    continue;
+
+                for (Interval formattedInterval : dayInterval.getIntervals()) {
+                    final ZonedDateTime from = ZonedDateTime.of(localNow.toLocalDate(), LocalTime.parse(formattedInterval.getFrom()), localNow.getZone());
+                    if (!from.isBefore(localNow)) {
+                        nextOpeningDateTime = String.format("Today at %s", formattedInterval.getFrom());
+                        foundNext = true;
+                    }
+                }
+            }
+
+            if (!foundNext) {
+                for (WeekDayInterval dayInterval : openingHours) {
+                    if (dayInterval.getDayOfWeek().getValue() > currentDayOfWeek.getValue())
+                        continue;
+
+                    for (Interval formattedInterval : dayInterval.getIntervals()) {
+                        final ZonedDateTime from = ZonedDateTime.of(localNow.toLocalDate(), LocalTime.parse(formattedInterval.getFrom()), localNow.getZone());
+                        nextOpeningDateTime = String.format("%s at %s", dayInterval.getDayOfWeek().toString(), formattedInterval.getFrom());
+                        foundNext = true;
+                        break;
+                    }
+
+                    if (foundNext)
+                        break;
+                }
+            }
+
+            if (!foundNext) {
+                for (WeekDayInterval dayInterval : openingHours) {
+                    if (dayInterval.getDayOfWeek().getValue() < currentDayOfWeek.getValue())
+                        continue;
+
+                    for (Interval formattedInterval : dayInterval.getIntervals()) {
+                        final ZonedDateTime from = ZonedDateTime.of(localNow.toLocalDate(), LocalTime.parse(formattedInterval.getFrom()), localNow.getZone());
+                        nextOpeningDateTime = String.format("%s at %s", dayInterval.getDayOfWeek().toString(), formattedInterval.getFrom());
+                        foundNext = true;
+                        break;
+                    }
+
+                    if (foundNext)
+                        break;
+                }
+            }
+
+        }
+
+        return new Place(upstreamPlace.getId(), upstreamPlace.getName(), upstreamPlace.getAddress(), open, nextOpeningDateTime, openingHours);
     }
 }
